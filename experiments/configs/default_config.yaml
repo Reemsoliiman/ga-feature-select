@@ -1,0 +1,44 @@
+# Default GA Configuration
+
+genetic_algorithm:
+  population_size: 50
+  n_generations: 100
+  elitism_rate: 0.1
+  
+  selection:
+    method: "tournament"  # Options: tournament, roulette, rank
+    tournament_size: 3
+    
+  crossover:
+    method: "uniform"  # Options: single_point, two_point, uniform
+    probability: 0.8
+    
+  mutation:
+    method: "bit_flip"
+    probability: 0.01
+    adaptive: false
+
+fitness:
+  accuracy_weight: 0.7
+  feature_reduction_weight: 0.3
+  penalty_threshold: 0.95  # Penalize if using >95% features
+
+classifier:
+  type: "decision_tree"
+  max_depth: 10
+  min_samples_split: 5
+  random_state: 42
+
+evaluation:
+  cv_folds: 5
+  n_runs: 10
+  random_state: 42
+  metrics:
+    - accuracy
+    - f1_score
+    - feature_count
+
+output:
+  save_models: true
+  save_plots: true
+  verbose: true
