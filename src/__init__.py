@@ -1,4 +1,6 @@
-"""GA-FeatureSelect: Genetic Algorithm-based Feature Selection Framework"""
+# Import main classes for easy access
+from .genetic_algorithm import GeneticAlgorithm
+from .fitness import FitnessEvaluator
+from .decision_tree import DecisionTreeWrapper
 
-__version__ = "0.1.0"
-__author__ = "Reem Soliman"
+__all__ = ['GeneticAlgorithm', 'FitnessEvaluator', 'DecisionTreeWrapper']

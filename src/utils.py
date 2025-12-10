@@ -1,100 +1,258 @@
 """
-Utility functions for data loading, preprocessing, and visualization.
+Utility Functions
+Data loading, preprocessing, and visualization helpers.
 """
-
-import numpy as np
 import pandas as pd
-import os
-from typing import Tuple, List
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import train_test_split
+from src.config import HANDLE_MISSING, NORMALIZE, TEST_SIZE, RANDOM_STATE
 
-
-def load_data(dataset_path: str) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+def load_dataset(filepath):
     """
-    Load dataset from CSV file and split into features (X) and target (y).
+    Load dataset from CSV file with preprocessing.
     
-    The last column is assumed to be the target variable.
-    All other columns are treated as features.
-    
-    Parameters
-    ----------
-    dataset_path : str
-        Absolute or relative path to the CSV file.
+    Args:
+        filepath: Path to CSV file
         
-    Returns
-    -------
-    X : np.ndarray
-        Feature matrix of shape (n_samples, n_features).
-    y : np.ndarray
-        Target vector of shape (n_samples,).
-    feature_names : list of str
-        List of feature column names.
-        
-    Raises
-    ------
-    FileNotFoundError
-        If the dataset file does not exist.
-    ValueError
-        If the CSV has fewer than 2 columns.
+    Returns:
+        X: Feature matrix (numpy array)
+        y: Target labels (numpy array)
+        feature_names: List of feature column names
     """
-    if not os.path.exists(dataset_path):
-        raise FileNotFoundError(f"Dataset not found at: {dataset_path}")
-    
     # Load CSV
-    df = pd.read_csv(dataset_path)
+    df = pd.read_csv(filepath)
     
-    if df.shape[1] < 2:
-        raise ValueError(f"Dataset must have at least 2 columns (features + target). Found {df.shape[1]} columns.")
+    # Assume last column is target
+    X = df.iloc[:, :-1]
+    y = df.iloc[:, -1]
+    feature_names = X.columns.tolist()
     
-    # Split features and target
-    # Last column is target, all others are features
-    feature_columns = df.columns[:-1].tolist()
-    target_column = df.columns[-1]
+    # Handle missing values
+    if HANDLE_MISSING == 'mean':
+        X = X.fillna(X.mean())
+    elif HANDLE_MISSING == 'median':
+        X = X.fillna(X.median())
+    elif HANDLE_MISSING == 'drop':
+        df = df.dropna()
+        X = df.iloc[:, :-1]
+        y = df.iloc[:, -1]
     
-    X = df[feature_columns].values
-    y = df[target_column].values
+    # Encode categorical features
+    for col in X.columns:
+        if X[col].dtype == 'object':
+            le = LabelEncoder()
+            X[col] = le.fit_transform(X[col].astype(str))
     
-    return X, y, feature_columns
+    # Encode target if categorical
+    if y.dtype == 'object':
+        le = LabelEncoder()
+        y = le.fit_transform(y.astype(str))
+    
+    # Normalize features
+    if NORMALIZE:
+        scaler = StandardScaler()
+        X = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
+    
+    return X.values, y.values, feature_names
 
-
-def weights_to_mask(weights: np.ndarray, threshold: float = 0.5) -> np.ndarray:
+def split_data(X, y, test_size=None, random_state=None):
     """
-    Convert continuous feature weights to binary mask.
+    Split data into train and test sets.
     
-    Parameters
-    ----------
-    weights : np.ndarray
-        Array of feature weights in [0, 1].
-    threshold : float, optional
-        Threshold for selecting features (default: 0.5).
-        Features with weight >= threshold are selected.
+    Args:
+        X: Features
+        y: Labels
+        test_size: Proportion for test set
+        random_state: Random seed
         
-    Returns
-    -------
-    mask : np.ndarray
-        Binary mask where 1 indicates selected feature.
+    Returns:
+        X_train, X_test, y_train, y_test
     """
-    return (weights >= threshold).astype(int)
-
-
-def get_selected_features(weights: np.ndarray, 
-                         feature_names: List[str], 
-                         threshold: float = 0.5) -> List[str]:
-    """
-    Get names of selected features based on weights and threshold.
+    test_size = test_size or TEST_SIZE
+    random_state = random_state or RANDOM_STATE
     
-    Parameters
-    ----------
-    weights : np.ndarray
-        Array of feature weights in [0, 1].
-    feature_names : list of str
-        List of feature names.
-    threshold : float, optional
-        Threshold for selecting features (default: 0.5).
-        
-    Returns
-    -------
-    selected : list of str
-        Names of features with weight >= threshold.
+    return train_test_split(X, y, test_size=test_size, 
+                           random_state=random_state, stratify=y)
+
+def plot_convergence(history, title="GA Convergence", save_path=None):
     """
-    mask = weights_to_mask(weights, threshold)
-    return [feature_names[i] for i in range(len(feature_names)) if mask[i] == 1]
+    Plot fitness evolution over generations.
+    
+    Args:
+        history: Dictionary with 'best_fitness' and 'avg_fitness' lists
+        title: Plot title
+        save_path: If provided, save plot to this path
+    """
+    plt.figure(figsize=(10, 6))
+    generations = range(len(history['best_fitness']))
+    
+    plt.plot(generations, history['best_fitness'], label='Best Fitness', linewidth=2)
+    plt.plot(generations, history['avg_fitness'], label='Average Fitness', 
+             linewidth=2, alpha=0.7)
+    
+    plt.xlabel('Generation', fontsize=12)
+    plt.ylabel('Fitness', fontsize=12)
+    plt.title(title, fontsize=14)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    else:
+        plt.show()
+    
+    plt.close()
+
+def plot_feature_reduction(history, title="Feature Reduction Over Time", save_path=None):
+    """
+    Plot number of selected features over generations.
+    
+    Args:
+        history: Dictionary with 'n_features_selected' list
+        title: Plot title
+        save_path: If provided, save plot to this path
+    """
+    plt.figure(figsize=(10, 6))
+    generations = range(len(history['n_features_selected']))
+    
+    plt.plot(generations, history['n_features_selected'], linewidth=2, color='green')
+    
+    plt.xlabel('Generation', fontsize=12)
+    plt.ylabel('Number of Features Selected', fontsize=12)
+    plt.title(title, fontsize=14)
+    plt.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    else:
+        plt.show()
+    
+    plt.close()
+
+def plot_operator_comparison(results_df, metric='accuracy', save_path=None):
+    """
+    Create box plot comparing different operator configurations.
+    
+    Args:
+        results_df: DataFrame with columns: [selection, crossover, mutation, accuracy, ...]
+        metric: Which metric to plot ('accuracy', 'n_features', etc.)
+        save_path: If provided, save plot to this path
+    """
+    plt.figure(figsize=(14, 6))
+    
+    # Create combined label
+    results_df['config'] = (results_df['selection'] + '_' + 
+                           results_df['crossover'] + '_' + 
+                           results_df['mutation'])
+    
+    # Box plot
+    sns.boxplot(data=results_df, x='config', y=metric)
+    plt.xticks(rotation=45, ha='right')
+    plt.xlabel('Configuration (Selection_Crossover_Mutation)', fontsize=12)
+    plt.ylabel(metric.capitalize(), fontsize=12)
+    plt.title(f'{metric.capitalize()} Comparison Across Configurations', fontsize=14)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    else:
+        plt.show()
+    
+    plt.close()
+
+def plot_heatmap(results_df, selection_method, save_path=None):
+    """
+    Create heatmap showing crossover vs mutation performance for a selection method.
+    
+    Args:
+        results_df: DataFrame with experiment results
+        selection_method: Which selection method to filter for
+        save_path: If provided, save plot to this path
+    """
+    # Filter for specific selection method
+    filtered = results_df[results_df['selection'] == selection_method]
+    
+    # Pivot to create matrix
+    pivot = filtered.pivot_table(
+        values='accuracy', 
+        index='mutation', 
+        columns='crossover', 
+        aggfunc='mean'
+    )
+    
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(pivot, annot=True, fmt='.4f', cmap='YlGnBu', cbar_kws={'label': 'Accuracy'})
+    plt.title(f'Performance Heatmap - {selection_method.capitalize()} Selection', fontsize=14)
+    plt.xlabel('Crossover Method', fontsize=12)
+    plt.ylabel('Mutation Method', fontsize=12)
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    else:
+        plt.show()
+    
+    plt.close()
+
+def plot_feature_frequency(all_best_individuals, feature_names, top_n=20, save_path=None):
+    """
+    Plot frequency of features being selected across all runs.
+    
+    Args:
+        all_best_individuals: List of binary masks from different runs
+        feature_names: List of feature names
+        top_n: Show top N most frequently selected features
+        save_path: If provided, save plot to this path
+    """
+    # Count selections
+    feature_counts = np.sum(all_best_individuals, axis=0)
+    
+    # Get top N
+    top_indices = np.argsort(feature_counts)[-top_n:][::-1]
+    top_counts = feature_counts[top_indices]
+    top_names = [feature_names[i] for i in top_indices]
+    
+    plt.figure(figsize=(12, 6))
+    plt.barh(range(len(top_names)), top_counts, color='steelblue')
+    plt.yticks(range(len(top_names)), top_names)
+    plt.xlabel('Selection Frequency', fontsize=12)
+    plt.title(f'Top {top_n} Most Frequently Selected Features', fontsize=14)
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    else:
+        plt.show()
+    
+    plt.close()
+
+def save_results_to_csv(results, filepath):
+    """
+    Save experiment results to CSV.
+    
+    Args:
+        results: List of dictionaries or DataFrame
+        filepath: Output CSV path
+    """
+    if isinstance(results, list):
+        df = pd.DataFrame(results)
+    else:
+        df = results
+    
+    df.to_csv(filepath, index=False)
+    print(f"Results saved to {filepath}")
+
+def load_results_from_csv(filepath):
+    """
+    Load experiment results from CSV.
+    
+    Args:
+        filepath: Path to CSV file
+        
+    Returns:
+        DataFrame with results
+    """
+    return pd.read_csv(filepath)
