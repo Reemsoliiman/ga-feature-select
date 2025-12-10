@@ -74,7 +74,7 @@ ADAPTIVE_MUTATION_MAX = 0.1    # Maximum mutation rate
 CV_FOLDS = 5  # Number of k-fold cross-validation folds
 
 # Feature Penalty
-LAMBDA_PENALTY = 0.01  # Penalty weight for feature count
+LAMBDA_PENALTY = 0.001  # Penalty weight for feature count
 # Formula: fitness = accuracy - lambda * (n_selected / n_total)
 # Higher lambda = stronger penalty for using many features
 
@@ -83,6 +83,14 @@ DT_MAX_DEPTH = 5              # Maximum depth of decision tree
 DT_MIN_SAMPLES_SPLIT = 10     # Minimum samples required to split node
 DT_MIN_SAMPLES_LEAF = 5       # Minimum samples required in leaf node
 DT_RANDOM_STATE = 42          # Random state for reproducibility
+
+# =============================================================================
+# EARLY STOPPING CONFIG
+# =============================================================================
+EARLY_STOPPING = True                  # Enable/disable early stopping
+EARLY_STOPPING_PATIENCE = 10           # Stop if no improvement for 10 generations
+EARLY_STOPPING_MIN_GENS = 10           # Don't stop before generation 10
+EARLY_STOPPING_DELTA = 0.0001          # Minimum improvement to count as "better"
 
 # =============================================================================
 # PARALLEL PROCESSING (NEW)

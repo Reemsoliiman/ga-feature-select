@@ -27,7 +27,8 @@ from .config import (
     POPULATION_SIZE, N_GENERATIONS, MUTATION_RATE, CROSSOVER_RATE,
     ELITISM_RATE, TOURNAMENT_SIZE, RANDOM_STATE, WEIGHT_THRESHOLD, 
     MAX_ELITISM_FRACTION, VERBOSE, SELECTION_METHODS, CROSSOVER_METHODS,
-    MUTATION_METHODS, DEFAULT_SELECTION, DEFAULT_CROSSOVER, DEFAULT_MUTATION
+    MUTATION_METHODS, DEFAULT_SELECTION, DEFAULT_CROSSOVER, DEFAULT_MUTATION,
+    EARLY_STOPPING, EARLY_STOPPING_PATIENCE, EARLY_STOPPING_MIN_GENS, EARLY_STOPPING_DELTA
 )
 
 
@@ -116,6 +117,15 @@ class GeneticAlgorithm:
         self.tournament_size = kwargs.get('tournament_size', TOURNAMENT_SIZE)
         self.weight_threshold = kwargs.get('weight_threshold', WEIGHT_THRESHOLD)
         
+        # Early stopping
+        self.early_stopping = EARLY_STOPPING
+        self.patience = EARLY_STOPPING_PATIENCE
+        self.min_gens = EARLY_STOPPING_MIN_GENS
+        self.delta = EARLY_STOPPING_DELTA
+
+        self.gens_no_improve = 0
+        self.best_fitness_ever = -np.inf
+
         # Operator methods
         self.selection_method = selection
         self.crossover_method = crossover
@@ -396,104 +406,96 @@ class GeneticAlgorithm:
     
     def evolve(self) -> Tuple[np.ndarray, Dict]:
         """
-        Run the genetic algorithm evolution loop.
-        
-        The algorithm:
-        1. Initialize population with random weights
-        2. For each generation:
-            a. Evaluate fitness for all individuals
-            b. Track best solution and history
-            c. Compute elite count
-            d. Sort population by fitness
-            e. Copy elites to next generation
-            f. Generate offspring via selection, crossover, mutation
-            g. Update population
-        3. Return best solution and history
-        
-        Returns
-        -------
-        best_weights : np.ndarray
-            Best weight vector found.
-        history : dict
-            Evolution history with keys:
-            - 'best_fitness': list of best fitness per generation
-            - 'mean_fitness': list of mean fitness per generation
-            - 'best_weights': list of best weight vectors per generation
-            - 'n_selected_features': list of feature counts per generation
+        Run the genetic algorithm evolution loop with early stopping.
         """
         # Initialize population
         self.population = self._initialize_population()
         
+        # Early stopping initialization
+        self.gens_no_improve = 0
+        self.best_fitness_ever = -np.inf  # Tracks true best across all generations
+
         # Evolution loop
         for generation in range(self.n_generations):
             # Evaluate fitness
             self.fitness_scores = self._evaluate_population(self.population)
             
-            # Track best solution
+            # Find current generation's best
             best_idx = np.argmax(self.fitness_scores)
             gen_best_fitness = self.fitness_scores[best_idx]
             gen_best_weights = self.population[best_idx].copy()
-            
+
+            # === EARLY STOPPING & BEST TRACKING LOGIC ===
+            improved = False
+            if gen_best_fitness > self.best_fitness_ever + self.delta:
+                self.best_fitness_ever = gen_best_fitness
+                self.best_individual = gen_best_weights.copy()
+                self.best_fitness = gen_best_fitness
+                self.gens_no_improve = 0
+                improved = True
+            else:
+                self.gens_no_improve += 1
+
+            # Always update current best (for history)
             if gen_best_fitness > self.best_fitness:
                 self.best_fitness = gen_best_fitness
-                self.best_individual = gen_best_weights
-            
-            # Track history
+                self.best_individual = gen_best_weights.copy()
+
+            # Track history (based on current global best)
             mean_fitness = np.mean(self.fitness_scores)
             best_mask = self._weights_to_mask(self.best_individual)
-            n_selected = np.sum(best_mask)
-            
+            n_selected = int(np.sum(best_mask))
+
             self.history['best_fitness'].append(self.best_fitness)
             self.history['mean_fitness'].append(mean_fitness)
             self.history['best_weights'].append(self.best_individual.copy())
             self.history['n_selected_features'].append(n_selected)
-            
+
             # Verbose output
             if VERBOSE:
+                status = " (improved)" if improved else ""
                 print(
                     f"Generation {generation + 1}/{self.n_generations} | "
-                    f"Best Fitness: {self.best_fitness:.4f} | "
+                    f"Best Fitness: {self.best_fitness:.6f}{status} | "
                     f"Mean Fitness: {mean_fitness:.4f} | "
-                    f"Features: {n_selected}/{self.n_features}"
+                    f"Features: {n_selected}/{self.n_features} | "
+                    f"No improve: {self.gens_no_improve}"
                 )
-            
-            # Compute elite count
+
+            # === EARLY STOPPING CHECK ===
+            if (self.early_stopping 
+                and generation >= self.min_gens 
+                and self.gens_no_improve >= self.patience):
+                
+                if VERBOSE:
+                    print(f"\nEARLY STOPPING at generation {generation + 1}")
+                    print(f"No improvement in fitness for {self.patience} generations.")
+                    print(f"Best fitness achieved: {self.best_fitness:.6f} with {n_selected} features\n")
+                break
+
+            # === REST OF EVOLUTION (unchanged) ===
             elite_count = self._compute_elite_count()
-            
-            # Sort population by fitness (descending)
             sorted_indices = np.argsort(self.fitness_scores)[::-1]
             sorted_population = self.population[sorted_indices]
-            
-            # Create next generation
+
             next_population = []
-            
-            # Step 1: Copy elites
             elites = sorted_population[:elite_count].copy()
             next_population.extend(elites)
-            
-            # Step 2: Generate offspring
+
             while len(next_population) < self.pop_size:
-                # Select two parents
                 parents = self._select_parents(n_parents=2)
                 parent1, parent2 = parents[0], parents[1]
-                
-                # Crossover
                 offspring1, offspring2 = self._crossover(parent1, parent2)
-                
-                # Mutation
                 offspring1 = self._mutate(offspring1, generation)
                 offspring2 = self._mutate(offspring2, generation)
-                
-                # Add to next generation
                 next_population.append(offspring1)
                 if len(next_population) < self.pop_size:
                     next_population.append(offspring2)
-            
-            # Update population
+
             self.population = np.array(next_population[:self.pop_size])
-        
+
         return self.best_individual, self.history
-    
+
     def get_selected_features(self, feature_names: Optional[List[str]] = None) -> List:
         """
         Get selected features from best individual.

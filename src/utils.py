@@ -80,50 +80,42 @@ def split_data(X, y, test_size=None, random_state=None):
 def plot_convergence(history, title="GA Convergence", save_path=None):
     """
     Plot fitness evolution over generations.
-    
-    Args:
-        history: Dictionary with 'best_fitness' and 'avg_fitness' lists
-        title: Plot title
-        save_path: If provided, save plot to this path
     """
     plt.figure(figsize=(10, 6))
     generations = range(len(history['best_fitness']))
     
-    plt.plot(generations, history['best_fitness'], label='Best Fitness', linewidth=2)
-    plt.plot(generations, history['avg_fitness'], label='Average Fitness', 
-             linewidth=2, alpha=0.7)
+    plt.plot(generations, history['best_fitness'], 
+             label='Best Fitness', linewidth=2.5, color='tab:blue')
+    plt.plot(generations, history['mean_fitness'], 
+             label='Average Fitness', linewidth=2, alpha=0.8, color='tab:orange')
     
     plt.xlabel('Generation', fontsize=12)
     plt.ylabel('Fitness', fontsize=12)
-    plt.title(title, fontsize=14)
-    plt.legend()
+    plt.title(title, fontsize=14, fontweight='bold')
+    plt.legend(fontsize=11)
     plt.grid(True, alpha=0.3)
+    plt.tight_layout()
     
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Convergence plot saved: {save_path}")
     else:
         plt.show()
     
     plt.close()
 
 def plot_feature_reduction(history, title="Feature Reduction Over Time", save_path=None):
-    """
-    Plot number of selected features over generations.
-    
-    Args:
-        history: Dictionary with 'n_features_selected' list
-        title: Plot title
-        save_path: If provided, save plot to this path
-    """
     plt.figure(figsize=(10, 6))
-    generations = range(len(history['n_features_selected']))
+    generations = range(len(history['n_selected_features']))
     
-    plt.plot(generations, history['n_features_selected'], linewidth=2, color='green')
+    plt.plot(generations, history['n_selected_features'], 
+             linewidth=2.5, color='green')
     
     plt.xlabel('Generation', fontsize=12)
-    plt.ylabel('Number of Features Selected', fontsize=12)
-    plt.title(title, fontsize=14)
+    plt.ylabel('Number of Selected Features', fontsize=12)
+    plt.title(title, fontsize=14, fontweight='bold')
     plt.grid(True, alpha=0.3)
+    plt.tight_layout()
     
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
