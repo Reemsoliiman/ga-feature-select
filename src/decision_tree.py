@@ -3,7 +3,7 @@ Decision Tree Classifier Wrapper
 Provides a clean interface for training and evaluating decision trees.
 """
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, StratifiedKFold
 import numpy as np
 from .config import DT_MAX_DEPTH, DT_MIN_SAMPLES_SPLIT, DT_MIN_SAMPLES_LEAF, RANDOM_STATE
 
@@ -80,6 +80,7 @@ class DecisionTreeWrapper:
         Returns:
             Mean accuracy across all folds
         """
+        skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=RANDOM_STATE)
         scores = cross_val_score(self.model, X, y, cv=cv, scoring='accuracy')
         return np.mean(scores)
 

@@ -167,16 +167,16 @@ def plot_heatmap(results_df, selection_method, save_path=None):
     # Filter for specific selection method
     filtered = results_df[results_df['selection'] == selection_method]
     
-    # Pivot to create matrix
+    # Pivot to create matrix (use test_accuracy now)
     pivot = filtered.pivot_table(
-        values='accuracy', 
+        values='test_accuracy', 
         index='mutation', 
         columns='crossover', 
         aggfunc='mean'
     )
     
     plt.figure(figsize=(8, 6))
-    sns.heatmap(pivot, annot=True, fmt='.4f', cmap='YlGnBu', cbar_kws={'label': 'Accuracy'})
+    sns.heatmap(pivot, annot=True, fmt='.4f', cmap='YlGnBu', cbar_kws={'label': 'Test Accuracy'})
     plt.title(f'Performance Heatmap - {selection_method.capitalize()} Selection', fontsize=14)
     plt.xlabel('Crossover Method', fontsize=12)
     plt.ylabel('Mutation Method', fontsize=12)

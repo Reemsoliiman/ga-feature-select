@@ -1,6 +1,6 @@
 """
 Operator Comparison Experiments for Genetic Algorithm Feature Selection
-FINAL VERSION - Fixed, Clean, Professional Output
+FIXED: Proper Train/Test Split
 """
 
 import sys
@@ -19,20 +19,18 @@ from datetime import datetime
 from typing import Dict, Tuple, List
 
 from src.genetic_algorithm import GeneticAlgorithm
+from src.decision_tree import DecisionTreeWrapper
 from src.config import (
     SELECTION_METHODS, CROSSOVER_METHODS, MUTATION_METHODS,
     N_RUNS, EXPERIMENTS_DIR, BEST_FEATURES_DIR, PLOTS_DIR, REPORTS_DIR,
     WEIGHT_THRESHOLD, RANDOM_SEED
 )
 from src.utils import (
-    load_dataset, plot_convergence, plot_feature_reduction,
+    load_dataset, split_data, plot_convergence, plot_feature_reduction,
     plot_operator_comparison, plot_heatmap, plot_feature_frequency
 )
 
 
-# =============================================================================
-# HELPER: Convert numpy objects for JSON saving
-# =============================================================================
 def convert_numpy(obj):
     """Recursively convert numpy arrays and scalars to JSON-serializable types"""
     if isinstance(obj, np.ndarray):
@@ -50,28 +48,54 @@ def convert_numpy(obj):
     return obj
 
 
-# =============================================================================
-# Run single experiment
-# =============================================================================
-def run_single_experiment(X_train, y_train, selection, crossover, mutation, run_id):
+def run_single_experiment(X_train, y_train, X_test, y_test, selection, crossover, mutation, run_id):
+    """
+    Run GA on training data, evaluate on test data.
+    
+    Args:
+        X_train, y_train: Training data (GA only sees this)
+        X_test, y_test: Test data (for final unbiased evaluation)
+        selection, crossover, mutation: GA operator methods
+        run_id: Identifier for this run
+    """
+    # Convert to numpy if DataFrames
+    X_train_np = np.array(X_train)
+    X_test_np = np.array(X_test)
+    y_train_np = np.array(y_train)
+    y_test_np = np.array(y_test)
+    
+    # GA trains on X_train with internal CV
     ga = GeneticAlgorithm(
-        X_train, y_train,
+        X_train_np, y_train_np,
         selection=selection,
         crossover=crossover,
         mutation=mutation
     )
     best_weights, history = ga.evolve()
 
+    # Convert best weights to binary mask
     best_mask = (best_weights >= WEIGHT_THRESHOLD).astype(int)
     n_selected = int(np.sum(best_mask))
     reduction = (1 - n_selected / len(best_weights)) * 100
+
+    # Evaluate on TEST set (unbiased)
+    selected_indices = np.where(best_mask == 1)[0]
+    if len(selected_indices) > 0:
+        X_test_selected = X_test_np[:, selected_indices]
+        X_train_selected = X_train_np[:, selected_indices]
+        dt = DecisionTreeWrapper()
+        dt.train(X_train_selected, y_train_np)
+        test_accuracy = dt.evaluate(X_test_selected, y_test_np)
+    else:
+        test_accuracy = 0.0
 
     result = {
         'run_id': run_id,
         'selection': selection,
         'crossover': crossover,
         'mutation': mutation,
-        'final_fitness': float(ga.best_fitness),
+        'train_fitness': float(ga.best_fitness),
+        'test_accuracy': float(test_accuracy),
         'n_features_selected': n_selected,
         'reduction_percentage': float(reduction),
         'best_weights': best_weights,
@@ -80,15 +104,16 @@ def run_single_experiment(X_train, y_train, selection, crossover, mutation, run_
     return result, history
 
 
-# =============================================================================
-# Run all experiments
-# =============================================================================
 def run_all_experiments(dataset_path):
     print("\n" + "="*70)
-    print("LOADING DATASET")
+    print("LOADING AND SPLITTING DATASET")
     print("="*70)
     X, y, feature_names = load_dataset(dataset_path)
+    X_train, X_test, y_train, y_test = split_data(X, y, test_size=0.2, random_state=RANDOM_SEED)
+    
     print(f"Dataset loaded: {X.shape[0]} samples, {X.shape[1]} features")
+    print(f"Training set: {X_train.shape[0]} samples")
+    print(f"Test set: {X_test.shape[0]} samples")
 
     all_results = []
     all_histories = {}
@@ -97,10 +122,7 @@ def run_all_experiments(dataset_path):
     configs = list(product(SELECTION_METHODS, CROSSOVER_METHODS, MUTATION_METHODS))
     total_runs = len(configs) * N_RUNS
 
-    print(f"\nSelection: {SELECTION_METHODS}")
-    print(f"Crossover: {CROSSOVER_METHODS}")
-    print(f"Mutation:  {MUTATION_METHODS}")
-    print(f"Total configurations: {len(configs)}, Runs per config: {N_RUNS} → {total_runs} total")
+    print(f"\nConfigurations: {len(configs)}, Runs per config: {N_RUNS} → {total_runs} total")
 
     print("\n" + "="*70)
     print("RUNNING EXPERIMENTS")
@@ -116,7 +138,8 @@ def run_all_experiments(dataset_path):
                         np.random.seed(RANDOM_SEED + run)
 
                         result, history = run_single_experiment(
-                            X, y, selection, crossover, mutation, run_id
+                            X_train, y_train, X_test, y_test,
+                            selection, crossover, mutation, run_id
                         )
 
                         all_results.append(result)
@@ -130,7 +153,8 @@ def run_all_experiments(dataset_path):
                             'selection': selection,
                             'crossover': crossover,
                             'mutation': mutation,
-                            'fitness': result['final_fitness'],
+                            'train_fitness': result['train_fitness'],
+                            'test_accuracy': result['test_accuracy'],
                             'n_features': result['n_features_selected'],
                             'reduction_pct': result['reduction_percentage'],
                             'selected_features': selected_names,
@@ -141,17 +165,14 @@ def run_all_experiments(dataset_path):
                         pbar.set_postfix({
                             'Config': config_name,
                             'Run': run,
-                            'Fitness': f"{result['final_fitness']:.4f}",
-                            'Features': result['n_features_selected']
+                            'Train': f"{result['train_fitness']:.4f}",
+                            'Test': f"{result['test_accuracy']:.4f}"
                         })
                         pbar.update(1)
 
     return pd.DataFrame(all_results), all_histories, feature_names, best_features_list
 
 
-# =============================================================================
-# Generate visualizations
-# =============================================================================
 def generate_visualizations(results_df, all_histories, feature_names, timestamp):
     print("\n" + "="*70)
     print("GENERATING VISUALIZATIONS")
@@ -160,14 +181,14 @@ def generate_visualizations(results_df, all_histories, feature_names, timestamp)
     os.makedirs(PLOTS_DIR, exist_ok=True)
 
     # Best convergence
-    best_run = results_df.loc[results_df['final_fitness'].idxmax()]
+    best_run = results_df.loc[results_df['test_accuracy'].idxmax()]
     best_history = all_histories[best_run['run_id']]
     plot_convergence(best_history,
-                     title=f"Best: {best_run['selection']}+{best_run['crossover']}+{best_run['mutation']}",
+                     title=f"Best Run: {best_run['selection']}+{best_run['crossover']}+{best_run['mutation']}",
                      save_path=os.path.join(PLOTS_DIR, f"best_convergence_{timestamp}.png"))
 
-    # Operator comparison
-    plot_operator_comparison(results_df, metric='final_fitness',
+    # Operator comparison (using test accuracy now)
+    plot_operator_comparison(results_df, metric='test_accuracy',
                              save_path=os.path.join(PLOTS_DIR, f"comparison_{timestamp}.png"))
 
     # Heatmaps
@@ -183,39 +204,37 @@ def generate_visualizations(results_df, all_histories, feature_names, timestamp)
     print(f"All plots saved to: {PLOTS_DIR}")
 
 
-# =============================================================================
-# Print beautiful final report
-# =============================================================================
 def print_final_report(results_df, best_features_list, feature_names, timestamp):
     print("\n" + "="*80)
-    print("TOP 5 BEST CONFIGURATIONS - SELECTED FEATURES")
+    print("TOP 5 BEST CONFIGURATIONS")
     print("="*80)
 
-    top5 = results_df.sort_values('final_fitness', ascending=False).head(5)
+    top5 = results_df.sort_values('test_accuracy', ascending=False).head(5)
 
     report_lines = []
     report_lines.append("GENETIC ALGORITHM FEATURE SELECTION - FINAL REPORT")
     report_lines.append(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    report_lines.append(f"Dataset: cleaned_diabetes_data.csv ({len(feature_names)} features)")
+    report_lines.append(f"Dataset: {len(feature_names)} features")
     report_lines.append("="*80 + "\n")
 
-    for idx, row in top5.iterrows():
+    for idx, (_, row) in enumerate(top5.iterrows(), 1):
         config = f"{row['selection']} + {row['crossover']} + {row['mutation']}"
         features = next(f['selected_features'] for f in best_features_list if f['run_id'] == row['run_id'])
         n_feat = len(features)
         reduction = row['reduction_percentage']
 
-        print(f"\n#{idx + 1} | {config}")
-        print(f"    Fitness: {row['final_fitness']:.6f}")
+        print(f"\n#{idx} | {config}")
+        print(f"    Train Fitness: {row['train_fitness']:.6f}")
+        print(f"    Test Accuracy: {row['test_accuracy']:.6f}")
         print(f"    Features: {n_feat}/{len(feature_names)} (↓ {reduction:.1f}%)")
-        print(f"    Selected Features ({n_feat}):")
-        for name in features:
-            print(f"      • {name}")
+        print(f"    Selected ({n_feat}): {', '.join(features[:5])}" + 
+              ("..." if len(features) > 5 else ""))
         print("-" * 80)
 
-        report_lines.append(f"TOP {idx + 1} | {config}")
-        report_lines.append(f"Fitness: {row['final_fitness']:.6f} | Features: {n_feat} | Reduction: {reduction:.1f}%")
-        report_lines.append("Features: " + ", ".join(features))
+        report_lines.append(f"#{idx} | {config}")
+        report_lines.append(f"Train Fitness: {row['train_fitness']:.6f} | Test Accuracy: {row['test_accuracy']:.6f}")
+        report_lines.append(f"Features: {n_feat} | Reduction: {reduction:.1f}%")
+        report_lines.append(f"Selected: {', '.join(features)}")
         report_lines.append("")
 
     # Save report
@@ -226,9 +245,6 @@ def print_final_report(results_df, best_features_list, feature_names, timestamp)
     print(f"\nFinal report saved: {report_path}")
 
 
-# =============================================================================
-# Main
-# =============================================================================
 def main():
     if len(sys.argv) < 2:
         print("Usage: python compare_operators.py <path_to_dataset.csv>")
@@ -259,7 +275,7 @@ def main():
     results_df.to_csv(results_path, index=False)
     print(f"\nResults saved: {results_path}")
 
-    # Save histories and best features (with numpy conversion)
+    # Save histories and best features
     histories_path = os.path.join(EXPERIMENTS_DIR, f"histories_{timestamp}.json")
     with open(histories_path, 'w') as f:
         json.dump(convert_numpy(histories), f, indent=2)
@@ -268,14 +284,12 @@ def main():
     with open(best_feat_path, 'w') as f:
         json.dump(convert_numpy(best_features_list), f, indent=2)
 
-    # Generate plots
+    # Generate plots and report
     generate_visualizations(results_df, histories, feature_names, timestamp)
-
-    # Final beautiful report
     print_final_report(results_df, best_features_list, feature_names, timestamp)
 
     print("\n" + "="*70)
-    print("ALL DONE! Check results/reports/ for your final report.")
+    print("ALL DONE! Check results/ for outputs.")
     print("="*70)
 
 
