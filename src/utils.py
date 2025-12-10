@@ -56,7 +56,7 @@ def load_dataset(filepath):
         scaler = StandardScaler()
         X = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
     
-    return X.values, y.values, feature_names
+    return X, y, feature_names
 
 def split_data(X, y, test_size=None, random_state=None):
     """
