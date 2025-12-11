@@ -30,8 +30,8 @@ DEFAULT_DATASET_PATH = os.path.join(PROCESSED_DATA_DIR, 'cleaned_diabetes_data.c
 # GENETIC ALGORITHM PARAMETERS
 # =============================================================================
 # Population and Evolution
-POPULATION_SIZE = 50
-N_GENERATIONS = 30
+POPULATION_SIZE = 75
+N_GENERATIONS = 50
 RANDOM_SEED = 42
 RANDOM_STATE = 42
 
@@ -44,7 +44,7 @@ ELITISM_RATE = 0.1    # Fraction of top individuals to preserve (10%)
 MAX_ELITISM_FRACTION = 0.3  # Maximum fraction of population for elites
 
 # Feature Selection Threshold
-WEIGHT_THRESHOLD = 0.5  # Weight >= threshold means feature selected
+WEIGHT_THRESHOLD = 0.6  # Weight >= threshold means feature selected
 # Note: This is used in fitness_evaluator.py to convert continuous weights to binary
 
 # =============================================================================
@@ -74,7 +74,7 @@ ADAPTIVE_MUTATION_MAX = 0.1    # Maximum mutation rate
 CV_FOLDS = 5  # Number of k-fold cross-validation folds
 
 # Feature Penalty
-LAMBDA_PENALTY = 0.001  # Penalty weight for feature count
+LAMBDA_PENALTY = 0.01  # Penalty weight for feature count
 # Formula: fitness = accuracy - lambda * (n_selected / n_total)
 # Higher lambda = stronger penalty for using many features
 
@@ -116,7 +116,7 @@ STRATIFY = True       # Whether to stratify split by target class
 # EXPERIMENT PARAMETERS
 # =============================================================================
 # Number of independent runs for statistical significance
-N_RUNS = 3  # Recommended: 3-10 for robust results
+N_RUNS = 2  # Recommended: 3-10 for robust results
 
 # Experiment configurations to test (examples)
 EXPERIMENT_CONFIGS = {
