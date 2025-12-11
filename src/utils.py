@@ -32,9 +32,11 @@ def load_dataset(filepath):
     
     # Handle missing values
     if HANDLE_MISSING == 'mean':
-        X = X.fillna(X.mean())
+        # FIX: numeric_only=True prevents crash on string/categorical columns
+        X = X.fillna(X.mean(numeric_only=True))
     elif HANDLE_MISSING == 'median':
-        X = X.fillna(X.median())
+        # FIX: numeric_only=True prevents crash on string/categorical columns
+        X = X.fillna(X.median(numeric_only=True))
     elif HANDLE_MISSING == 'drop':
         df = df.dropna()
         X = df.iloc[:, :-1]
@@ -42,19 +44,23 @@ def load_dataset(filepath):
     
     # Encode categorical features
     for col in X.columns:
-        if X[col].dtype == 'object':
+        # Check if object (string) or categorical
+        if X[col].dtype == 'object' or hasattr(X[col], 'cat'):
             le = LabelEncoder()
+            # Convert to string ensures NaNs are treated as "nan" category
             X[col] = le.fit_transform(X[col].astype(str))
     
     # Encode target if categorical
-    if y.dtype == 'object':
+    if y.dtype == 'object' or hasattr(y, 'cat'):
         le = LabelEncoder()
         y = le.fit_transform(y.astype(str))
     
     # Normalize features
     if NORMALIZE:
         scaler = StandardScaler()
-        X = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
+        # Ensure we only normalize if there are columns to normalize
+        if X.shape[1] > 0:
+            X = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
     
     return X, y, feature_names
 
@@ -127,11 +133,6 @@ def plot_feature_reduction(history, title="Feature Reduction Over Time", save_pa
 def plot_operator_comparison(results_df, metric='accuracy', save_path=None):
     """
     Create box plot comparing different operator configurations.
-    
-    Args:
-        results_df: DataFrame with columns: [selection, crossover, mutation, accuracy, ...]
-        metric: Which metric to plot ('accuracy', 'n_features', etc.)
-        save_path: If provided, save plot to this path
     """
     plt.figure(figsize=(14, 6))
     
@@ -157,12 +158,7 @@ def plot_operator_comparison(results_df, metric='accuracy', save_path=None):
 
 def plot_heatmap(results_df, selection_method, save_path=None):
     """
-    Create heatmap showing crossover vs mutation performance for a selection method.
-    
-    Args:
-        results_df: DataFrame with experiment results
-        selection_method: Which selection method to filter for
-        save_path: If provided, save plot to this path
+    Create heatmap showing crossover vs mutation performance.
     """
     # Filter for specific selection method
     filtered = results_df[results_df['selection'] == selection_method]
@@ -191,12 +187,6 @@ def plot_heatmap(results_df, selection_method, save_path=None):
 def plot_feature_frequency(all_best_individuals, feature_names, top_n=20, save_path=None):
     """
     Plot frequency of features being selected across all runs.
-    
-    Args:
-        all_best_individuals: List of binary masks from different runs
-        feature_names: List of feature names
-        top_n: Show top N most frequently selected features
-        save_path: If provided, save plot to this path
     """
     # Count selections
     feature_counts = np.sum(all_best_individuals, axis=0)
@@ -222,13 +212,6 @@ def plot_feature_frequency(all_best_individuals, feature_names, top_n=20, save_p
     plt.close()
 
 def save_results_to_csv(results, filepath):
-    """
-    Save experiment results to CSV.
-    
-    Args:
-        results: List of dictionaries or DataFrame
-        filepath: Output CSV path
-    """
     if isinstance(results, list):
         df = pd.DataFrame(results)
     else:
@@ -238,13 +221,4 @@ def save_results_to_csv(results, filepath):
     print(f"Results saved to {filepath}")
 
 def load_results_from_csv(filepath):
-    """
-    Load experiment results from CSV.
-    
-    Args:
-        filepath: Path to CSV file
-        
-    Returns:
-        DataFrame with results
-    """
     return pd.read_csv(filepath)
