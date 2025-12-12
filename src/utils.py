@@ -11,17 +11,6 @@ from sklearn.model_selection import train_test_split
 from src.config import HANDLE_MISSING, NORMALIZE, TEST_SIZE, RANDOM_STATE
 
 def load_dataset(filepath):
-    """
-    Load dataset from CSV file with preprocessing.
-    
-    Args:
-        filepath: Path to CSV file
-        
-    Returns:
-        X: Feature matrix (numpy array)
-        y: Target labels (numpy array)
-        feature_names: List of feature column names
-    """
     # Load CSV
     df = pd.read_csv(filepath)
     
@@ -65,23 +54,11 @@ def load_dataset(filepath):
     return X, y, feature_names
 
 def split_data(X, y, test_size=None, random_state=None):
-    """
-    Split data into train and test sets.
-    
-    Args:
-        X: Features
-        y: Labels
-        test_size: Proportion for test set
-        random_state: Random seed
-        
-    Returns:
-        X_train, X_test, y_train, y_test
-    """
     test_size = test_size or TEST_SIZE
     random_state = random_state or RANDOM_STATE
     
     return train_test_split(X, y, test_size=test_size, 
-                           random_state=random_state, stratify=y)
+                            random_state=random_state, stratify=y)
 
 def plot_convergence(history, title="GA Convergence", save_path=None):
     """
@@ -91,9 +68,9 @@ def plot_convergence(history, title="GA Convergence", save_path=None):
     generations = range(len(history['best_fitness']))
     
     plt.plot(generations, history['best_fitness'], 
-             label='Best Fitness', linewidth=2.5, color='tab:blue')
+                label='Best Fitness', linewidth=2.5, color='tab:blue')
     plt.plot(generations, history['mean_fitness'], 
-             label='Average Fitness', linewidth=2, alpha=0.8, color='tab:orange')
+                label='Average Fitness', linewidth=2, alpha=0.8, color='tab:orange')
     
     plt.xlabel('Generation', fontsize=12)
     plt.ylabel('Fitness', fontsize=12)
@@ -115,7 +92,7 @@ def plot_feature_reduction(history, title="Feature Reduction Over Time", save_pa
     generations = range(len(history['n_selected_features']))
     
     plt.plot(generations, history['n_selected_features'], 
-             linewidth=2.5, color='green')
+                linewidth=2.5, color='green')
     
     plt.xlabel('Generation', fontsize=12)
     plt.ylabel('Number of Selected Features', fontsize=12)
@@ -138,8 +115,8 @@ def plot_operator_comparison(results_df, metric='accuracy', save_path=None):
     
     # Create combined label
     results_df['config'] = (results_df['selection'] + '_' + 
-                           results_df['crossover'] + '_' + 
-                           results_df['mutation'])
+                            results_df['crossover'] + '_' + 
+                            results_df['mutation'])
     
     # Box plot
     sns.boxplot(data=results_df, x='config', y=metric)

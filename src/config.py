@@ -21,10 +21,10 @@ RESULTS_DIR = os.path.join(BASE_DIR, 'results')
 PLOTS_DIR = os.path.join(RESULTS_DIR, 'plots')
 EXPERIMENTS_DIR = os.path.join(RESULTS_DIR, 'experiments')
 BEST_FEATURES_DIR = os.path.join(RESULTS_DIR, 'best_features')
-REPORTS_DIR = os.path.join(RESULTS_DIR, 'reports')  # NEW: For generated reports
+REPORTS_DIR = os.path.join(RESULTS_DIR, 'reports')  
 
-# Default dataset path (processed diabetes data)
-DEFAULT_DATASET_PATH = os.path.join(PROCESSED_DATA_DIR, 'cleaned_diabetes_data.csv')
+# Default dataset path 
+DEFAULT_DATASET_PATH = os.path.join(DATA_DIR, 'diabetes_raw_data.csv')
 
 # =============================================================================
 # GENETIC ALGORITHM PARAMETERS
@@ -36,16 +36,15 @@ RANDOM_SEED = 42
 RANDOM_STATE = 42
 
 # Genetic Operators Rates
-MUTATION_RATE = 0.01  # Probability of mutating each gene
-CROSSOVER_RATE = 0.8  # Probability of performing crossover
-ELITISM_RATE = 0.1    # Fraction of top individuals to preserve (10%)
+MUTATION_RATE = 0.01  
+CROSSOVER_RATE = 0.8  
+ELITISM_RATE = 0.1    
 
 # Elitism Constraints
-MAX_ELITISM_FRACTION = 0.3  # Maximum fraction of population for elites
+MAX_ELITISM_FRACTION = 0.3 
 
 # Feature Selection Threshold
-WEIGHT_THRESHOLD = 0.6  # Weight >= threshold means feature selected
-# Note: This is used in fitness_evaluator.py to convert continuous weights to binary
+WEIGHT_THRESHOLD = 0.6  
 
 # =============================================================================
 # OPERATOR CONFIGURATION
@@ -61,42 +60,40 @@ CROSSOVER_METHODS = ['single_point', 'uniform', 'arithmetic']
 MUTATION_METHODS = ['bit_flip', 'uniform', 'adaptive']
 
 # Tournament Selection Parameters
-TOURNAMENT_SIZE = 3  # Number of individuals in each tournament
+TOURNAMENT_SIZE = 3  
 
-# Adaptive Mutation Parameters (if using adaptive mutation)
-ADAPTIVE_MUTATION_MIN = 0.001  # Minimum mutation rate
-ADAPTIVE_MUTATION_MAX = 0.1    # Maximum mutation rate
+# Adaptive Mutation Parameters 
+ADAPTIVE_MUTATION_MIN = 0.001  
+ADAPTIVE_MUTATION_MAX = 0.1    
 
 # =============================================================================
 # FITNESS EVALUATION PARAMETERS
 # =============================================================================
 # Cross-Validation Settings
-CV_FOLDS = 5  # Number of k-fold cross-validation folds
+CV_FOLDS = 5  
 
 # Feature Penalty
-LAMBDA_PENALTY = 0.01  # Penalty weight for feature count
-# Formula: fitness = accuracy - lambda * (n_selected / n_total)
-# Higher lambda = stronger penalty for using many features
+LAMBDA_PENALTY = 0.01  
 
 # Decision Tree Hyperparameters
-DT_MAX_DEPTH = 5              # Maximum depth of decision tree
-DT_MIN_SAMPLES_SPLIT = 10     # Minimum samples required to split node
-DT_MIN_SAMPLES_LEAF = 5       # Minimum samples required in leaf node
-DT_RANDOM_STATE = 42          # Random state for reproducibility
+DT_MAX_DEPTH = 5             
+DT_MIN_SAMPLES_SPLIT = 10     
+DT_MIN_SAMPLES_LEAF = 5       
+DT_RANDOM_STATE = 42        
 
 # =============================================================================
 # EARLY STOPPING CONFIG
 # =============================================================================
-EARLY_STOPPING = True                  # Enable/disable early stopping
-EARLY_STOPPING_PATIENCE = 10           # Stop if no improvement for 10 generations
-EARLY_STOPPING_MIN_GENS = 10           # Don't stop before generation 10
-EARLY_STOPPING_DELTA = 0.0001          # Minimum improvement to count as "better"
+EARLY_STOPPING = True                  
+EARLY_STOPPING_PATIENCE = 10           
+EARLY_STOPPING_MIN_GENS = 10           
+EARLY_STOPPING_DELTA = 0.0001          
 
 # =============================================================================
-# PARALLEL PROCESSING (NEW)
+# PARALLEL PROCESSING
 # =============================================================================
-USE_PARALLEL = True   # Enable parallel fitness evaluation
-N_JOBS = -1           # Number of parallel jobs (-1 = use all cores)
+USE_PARALLEL = True  
+N_JOBS = -1           
 
 # =============================================================================
 # DATA PREPROCESSING PARAMETERS
@@ -105,20 +102,19 @@ N_JOBS = -1           # Number of parallel jobs (-1 = use all cores)
 HANDLE_MISSING = 'mean'  # Options: 'mean', 'median', 'drop', 'knn'
 
 # Feature Scaling
-NORMALIZE = True      # Whether to normalize features (recommended: True)
-SCALING_METHOD = 'standard'  # Options: 'standard', 'minmax', 'robust'
+NORMALIZE = True      
+SCALING_METHOD = 'standard'  
 
 # Train-Test Split
-TEST_SIZE = 0.2       # Fraction of data for testing
-STRATIFY = True       # Whether to stratify split by target class
+TEST_SIZE = 0.2       
+STRATIFY = True      
 
 # =============================================================================
 # EXPERIMENT PARAMETERS
 # =============================================================================
 # Number of independent runs for statistical significance
-N_RUNS = 2  # Recommended: 3-10 for robust results
+N_RUNS = 2  
 
-# Experiment configurations to test (examples)
 EXPERIMENT_CONFIGS = {
     'exp1_selection': {
         'name': 'Selection Methods Comparison',
@@ -141,16 +137,16 @@ EXPERIMENT_CONFIGS = {
 # OUTPUT AND LOGGING SETTINGS
 # =============================================================================
 # Save Options
-SAVE_PLOTS = True         # Save evolution plots
-SAVE_RESULTS = True       # Save numerical results to CSV/JSON
-SAVE_BEST_INDIVIDUAL = True  # Save best individual's details
+SAVE_PLOTS = True         
+SAVE_RESULTS = True       
+SAVE_BEST_INDIVIDUAL = True  
 
 # Plotting Options
-PLOT_FORMAT = 'png'       # Options: 'png', 'pdf', 'svg'
-PLOT_DPI = 300            # Resolution for saved plots
+PLOT_FORMAT = 'png'       
+PLOT_DPI = 300           
 
 # Logging
-VERBOSE = True            # Print progress during evolution
-LOG_INTERVAL = 10         # Print stats every N generations
-SAVE_LOGS = True          # Save logs to file
+VERBOSE = True            
+LOG_INTERVAL = 10         
+SAVE_LOGS = True        
 

@@ -33,66 +33,6 @@ from .config import (
 
 
 class GeneticAlgorithm:
-    """
-    Genetic Algorithm for feature selection with continuous weight encoding.
-    
-    Each individual is represented as a continuous weight vector in [0, 1].
-    For fitness evaluation, weights are converted to binary masks using a threshold.
-    
-    The class orchestrates the evolution process, delegating operator implementations
-    to the operators module for cleaner separation of concerns.
-    
-    Parameters
-    ----------
-    X : np.ndarray
-        Feature matrix of shape (n_samples, n_features).
-    y : np.ndarray
-        Target labels of shape (n_samples,).
-    selection : str, optional
-        Selection method: 'tournament', 'roulette', 'rank' (default: from config).
-    crossover : str, optional
-        Crossover method: 'single_point', 'uniform', 'arithmetic' (default: from config).
-    mutation : str, optional
-        Mutation method: 'bit_flip', 'uniform', 'adaptive' (default: from config).
-    **kwargs : dict
-        Override config values:
-        - pop_size: Population size
-        - n_generations: Number of generations
-        - mut_rate: Mutation rate
-        - cross_rate: Crossover rate
-        - elitism_rate: Fraction of elites to preserve
-        - n_elites: Absolute number of elites (overrides elitism_rate)
-        - tournament_size: Tournament size for tournament selection
-        - weight_threshold: Threshold for binary conversion
-        - random_state: Random seed
-    
-    Attributes
-    ----------
-    X : np.ndarray
-        Feature matrix.
-    y : np.ndarray
-        Target vector.
-    n_features : int
-        Number of features.
-    population : np.ndarray
-        Current population of shape (pop_size, n_features).
-    fitness_scores : np.ndarray
-        Fitness scores for current population.
-    best_individual : np.ndarray
-        Best weight vector found during evolution.
-    best_fitness : float
-        Fitness of best individual.
-    history : dict
-        Evolution history tracking metrics per generation.
-    
-    Examples
-    --------
-    >>> from sklearn.datasets import load_breast_cancer
-    >>> X, y = load_breast_cancer(return_X_y=True)
-    >>> ga = GeneticAlgorithm(X, y, selection='tournament', crossover='uniform')
-    >>> best_weights, history = ga.evolve()
-    >>> selected_features = ga.get_selected_features()
-    """
     
     def __init__(
         self,
@@ -103,7 +43,6 @@ class GeneticAlgorithm:
         mutation: str = DEFAULT_MUTATION,
         **kwargs
     ):
-        """Initialize the Genetic Algorithm."""
         # Data
         self.X = X
         self.y = y
@@ -191,15 +130,6 @@ class GeneticAlgorithm:
             )
     
     def _compute_elite_count(self) -> int:
-        """
-        Compute the number of elites for the current generation.
-        
-        Returns
-        -------
-        elite_count : int
-            Number of elites, clamped to [1, floor(0.3 * pop_size)]
-            and never exceeding pop_size - 1.
-        """
         if self.n_elites is not None:
             elite_count = self.n_elites
         else:
@@ -272,41 +202,12 @@ class GeneticAlgorithm:
         return np.array(fitness_scores)
     
     def _weights_to_mask(self, weights: np.ndarray) -> np.ndarray:
-        """
-        Convert continuous weights to binary mask.
-        
-        Parameters
-        ----------
-        weights : np.ndarray
-            Weight vector in [0, 1].
-            
-        Returns
-        -------
-        mask : np.ndarray
-            Binary mask where 1 indicates weight >= threshold.
-        """
         return (weights >= self.weight_threshold).astype(int)
     
     # =============================================================================
-    # GENETIC OPERATORS (Delegation to operators module)
+    # GENETIC OPERATORS
     # =============================================================================
-    
     def _select_parents(self, n_parents: int) -> np.ndarray:
-        """
-        Select parents using configured selection method.
-        
-        Delegates to the appropriate operator function based on selection_method.
-        
-        Parameters
-        ----------
-        n_parents : int
-            Number of parents to select.
-            
-        Returns
-        -------
-        parents : np.ndarray
-            Selected parents of shape (n_parents, n_features).
-        """
         if self.selection_method == 'tournament':
             return operators.tournament_selection(
                 self.population,
@@ -337,27 +238,10 @@ class GeneticAlgorithm:
         parent1: np.ndarray,
         parent2: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Apply crossover to two parents using configured method.
-        
-        Applies crossover with probability cross_rate. If crossover is not
-        applied, returns copies of parents.
-        
-        Parameters
-        ----------
-        parent1, parent2 : np.ndarray
-            Parent weight vectors.
-            
-        Returns
-        -------
-        offspring1, offspring2 : np.ndarray
-            Two offspring weight vectors.
-        """
         # Apply crossover with probability cross_rate
         if self.rng.rand() >= self.cross_rate:
             return parent1.copy(), parent2.copy()
         
-        # Delegate to operator function
         if self.crossover_method == 'single_point':
             return operators.single_point_crossover(parent1, parent2, rng=self.rng)
         elif self.crossover_method == 'uniform':
@@ -368,23 +252,6 @@ class GeneticAlgorithm:
             raise ValueError(f"Unknown crossover method: {self.crossover_method}")
     
     def _mutate(self, individual: np.ndarray, generation: int = 0) -> np.ndarray:
-        """
-        Apply mutation to an individual using configured method.
-        
-        Delegates to the appropriate mutation operator function.
-        
-        Parameters
-        ----------
-        individual : np.ndarray
-            Weight vector to mutate.
-        generation : int, optional
-            Current generation (for adaptive mutation).
-            
-        Returns
-        -------
-        mutated : np.ndarray
-            Mutated weight vector.
-        """
         if self.mutation_method == 'bit_flip':
             return operators.bit_flip_mutation(individual, self.mut_rate, rng=self.rng)
         elif self.mutation_method == 'uniform':
@@ -497,25 +364,6 @@ class GeneticAlgorithm:
         return self.best_individual, self.history
 
     def get_selected_features(self, feature_names: Optional[List[str]] = None) -> List:
-        """
-        Get selected features from best individual.
-        
-        Parameters
-        ----------
-        feature_names : list of str, optional
-            Names of features. If provided, returns feature names.
-            Otherwise, returns feature indices.
-            
-        Returns
-        -------
-        selected : list
-            List of selected feature names or indices.
-            
-        Raises
-        ------
-        ValueError
-            If no evolution has been run yet.
-        """
         if self.best_individual is None:
             raise ValueError("No evolution has been run yet. Call evolve() first.")
         
