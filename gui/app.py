@@ -679,14 +679,214 @@ if uploaded_file:
         col2.metric("Test Accuracy", f"{best_config['test_accuracy']:.4f}")
         col3.metric("Features Used", f"{int(best_config['n_features'])}/{len(feature_names)}")
         
-        # Visualization
-        fig = px.box(results_df, x='selection', y='test_accuracy', color='crossover',
-                     title='Test Accuracy Distribution by Selection Method',
-                     height=500)
-        fig.update_layout(dragmode='zoom')
-        fig.update_xaxes(fixedrange=False)
-        fig.update_yaxes(fixedrange=False)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False, 'modeBarButtonsToAdd': ['zoom2d', 'pan2d', 'resetScale2d', 'autoScale2d']})
+        # === COMPREHENSIVE OPERATOR COMPARISON VISUALIZATIONS ===
+        st.markdown("---")
+        st.header("Detailed Operator Comparison Analysis")
+        
+        # Tab organization for different visualizations
+        viz_tabs = st.tabs([
+            "Box Plots", 
+            "Heatmaps", 
+            "Feature Reduction", 
+            "Performance Distribution",
+            "Statistical Summary"
+        ])
+        
+        # TAB 1: Box Plots (Original + Enhanced)
+        with viz_tabs[0]:
+            st.subheader("Performance Distribution by Operators")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig1 = px.box(results_df, x='selection', y='test_accuracy', color='crossover',
+                             title='Test Accuracy by Selection Method',
+                             labels={'test_accuracy': 'Test Accuracy', 'selection': 'Selection Method'},
+                             height=450)
+                fig1.update_layout(dragmode='zoom')
+                fig1.update_xaxes(fixedrange=False)
+                fig1.update_yaxes(fixedrange=False)
+                st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
+            
+            with col2:
+                fig2 = px.box(results_df, x='mutation', y='test_accuracy', color='selection',
+                             title='Test Accuracy by Mutation Method',
+                             labels={'test_accuracy': 'Test Accuracy', 'mutation': 'Mutation Method'},
+                             height=450)
+                fig2.update_layout(dragmode='zoom')
+                fig2.update_xaxes(fixedrange=False)
+                fig2.update_yaxes(fixedrange=False)
+                st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
+        
+        # TAB 2: Heatmaps (One for each selection method)
+        with viz_tabs[1]:
+            st.subheader("Performance Heatmaps: Crossover vs Mutation")
+            st.markdown("*Average test accuracy across all runs for each operator combination*")
+            
+            heatmap_cols = st.columns(len(SELECTION_METHODS))
+            
+            for idx, sel_method in enumerate(SELECTION_METHODS):
+                with heatmap_cols[idx]:
+                    # Filter data for this selection method
+                    filtered = results_df[results_df['selection'] == sel_method]
+                    
+                    # Create pivot table
+                    pivot = filtered.pivot_table(
+                        values='test_accuracy',
+                        index='mutation',
+                        columns='crossover',
+                        aggfunc='mean'
+                    )
+                    
+                    # Create heatmap
+                    fig_heat = go.Figure(data=go.Heatmap(
+                        z=pivot.values,
+                        x=pivot.columns,
+                        y=pivot.index,
+                        colorscale='Viridis',
+                        text=np.round(pivot.values, 4),
+                        texttemplate='%{text}',
+                        textfont={"size": 10},
+                        colorbar=dict(title="Accuracy")
+                    ))
+                    
+                    fig_heat.update_layout(
+                        title=f'{sel_method.capitalize()} Selection',
+                        xaxis_title='Crossover',
+                        yaxis_title='Mutation',
+                        height=400,
+                        margin=dict(l=80, r=20, t=60, b=60)
+                    )
+                    
+                    st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
+        
+        # TAB 3: Feature Reduction Analysis
+        with viz_tabs[2]:
+            st.subheader("Feature Reduction Performance")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Scatter: Accuracy vs Features
+                fig_scatter = px.scatter(
+                    results_df,
+                    x='n_features',
+                    y='test_accuracy',
+                    color='selection',
+                    symbol='crossover',
+                    size='reduction_pct',
+                    title='Test Accuracy vs Number of Features Selected',
+                    labels={'n_features': 'Features Selected', 'test_accuracy': 'Test Accuracy'},
+                    height=500,
+                    hover_data=['mutation', 'reduction_pct']
+                )
+                fig_scatter.update_layout(dragmode='zoom')
+                st.plotly_chart(fig_scatter, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
+            
+            with col2:
+                # Bar: Average reduction by operator
+                avg_reduction = results_df.groupby('selection')['reduction_pct'].mean().reset_index()
+                fig_bar = px.bar(
+                    avg_reduction,
+                    x='selection',
+                    y='reduction_pct',
+                    title='Average Feature Reduction by Selection Method',
+                    labels={'reduction_pct': 'Reduction (%)', 'selection': 'Selection Method'},
+                    height=500,
+                    color='selection',
+                    text='reduction_pct'
+                )
+                fig_bar.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
+        
+        # TAB 4: Performance Distribution
+        with viz_tabs[3]:
+            st.subheader("Detailed Performance Distributions")
+            
+            # Violin plots for each operator type
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                fig_v1 = px.violin(
+                    results_df,
+                    y='test_accuracy',
+                    x='selection',
+                    color='selection',
+                    box=True,
+                    title='Selection Methods',
+                    labels={'test_accuracy': 'Test Accuracy'},
+                    height=450
+                )
+                st.plotly_chart(fig_v1, use_container_width=True, config={'displayModeBar': False})
+            
+            with col2:
+                fig_v2 = px.violin(
+                    results_df,
+                    y='test_accuracy',
+                    x='crossover',
+                    color='crossover',
+                    box=True,
+                    title='Crossover Methods',
+                    labels={'test_accuracy': 'Test Accuracy'},
+                    height=450
+                )
+                st.plotly_chart(fig_v2, use_container_width=True, config={'displayModeBar': False})
+            
+            with col3:
+                fig_v3 = px.violin(
+                    results_df,
+                    y='test_accuracy',
+                    x='mutation',
+                    color='mutation',
+                    box=True,
+                    title='Mutation Methods',
+                    labels={'test_accuracy': 'Test Accuracy'},
+                    height=450
+                )
+                st.plotly_chart(fig_v3, use_container_width=True, config={'displayModeBar': False})
+        
+        # TAB 5: Statistical Summary
+        with viz_tabs[4]:
+            st.subheader("Statistical Analysis")
+            
+            # Detailed statistics by operator
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("##### Selection Methods")
+                sel_stats = results_df.groupby('selection').agg({
+                    'test_accuracy': ['mean', 'std', 'min', 'max'],
+                    'n_features': 'mean',
+                    'reduction_pct': 'mean'
+                }).round(4)
+                st.dataframe(sel_stats, use_container_width=True)
+            
+            with col2:
+                st.markdown("##### Crossover Methods")
+                cross_stats = results_df.groupby('crossover').agg({
+                    'test_accuracy': ['mean', 'std', 'min', 'max'],
+                    'n_features': 'mean',
+                    'reduction_pct': 'mean'
+                }).round(4)
+                st.dataframe(cross_stats, use_container_width=True)
+            
+            with col3:
+                st.markdown("##### Mutation Methods")
+                mut_stats = results_df.groupby('mutation').agg({
+                    'test_accuracy': ['mean', 'std', 'min', 'max'],
+                    'n_features': 'mean',
+                    'reduction_pct': 'mean'
+                }).round(4)
+                st.dataframe(mut_stats, use_container_width=True)
+            
+            # Top 10 configurations
+            st.markdown("---")
+            st.markdown("##### Top 10 Configurations (by Test Accuracy)")
+            top10 = results_df.nlargest(10, 'test_accuracy')[
+                ['selection', 'crossover', 'mutation', 'test_accuracy', 'n_features', 'reduction_pct']
+            ].reset_index(drop=True)
+            top10.index = range(1, 11)
+            st.dataframe(top10.style.background_gradient(subset=['test_accuracy'], cmap='Greens'), use_container_width=True)
         
         # Download
         st.download_button(
