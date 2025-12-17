@@ -24,6 +24,7 @@ from src.config import (
     SELECTION_METHODS, CROSSOVER_METHODS, MUTATION_METHODS, WEIGHT_THRESHOLD,
     N_RUNS, RANDOM_SEED
 )
+from sklearn.impute import KNNImputer
 
 # Page configuration
 st.set_page_config(
@@ -54,16 +55,17 @@ st.markdown("""
     /* UPDATED CARD STYLE */
     .info-card {
         background-color: white;
-        padding: 1.5rem;       /* Reduced padding to fit more text */
+        padding: 1.5rem;
         border-radius: 12px;
         border: 1px solid #e9ecef;
         border-left: 5px solid #667eea;
         box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         margin-bottom: 1rem;
-        height: 380px;         /* Increased height to prevent overflow */
+        height: 420px;         /* Increased to accommodate 6 items */
         display: flex;
         flex-direction: column;
         justify-content: flex-start;
+        overflow: hidden;      /* Prevent overflow */
     }
     .info-card h4 {
         color: #667eea;
@@ -73,19 +75,22 @@ st.markdown("""
         font-weight: 600;
         border-bottom: 1px solid #eee;
         padding-bottom: 0.5rem;
+        flex-shrink: 0;        /* Don't shrink title */
     }
     .info-card ul {
         list-style-type: none;
         padding-left: 0;
         margin: 0;
         flex-grow: 1;
+        overflow-y: auto;      /* Add scroll if needed */
     }
     .info-card ul li {
-        margin-bottom: 0.5rem; /* Reduced spacing between items */
+        margin-bottom: 0.6rem;
         font-size: 0.95rem;
         color: #4a5568;
         padding-left: 1.2rem;
         position: relative;
+        line-height: 1.4;      /* Better readability */
     }
     .info-card ul li::before {
         content: "•";
@@ -394,8 +399,7 @@ with st.sidebar:
             # The app expects target to be the last column. Check if it is.
             if df.columns[-1] != target_col:
                 st.warning(f"Target '{target_col}' is not the last column.")
-                if st.button("Fix: Move Target to End", type="primary"):
-                    # Reorder columns: everything else + target
+                if st.button("Fix: Move Target to End", type="primary", key="move_target"):
                     new_order = [c for c in df.columns if c != target_col] + [target_col]
                     st.session_state['df'] = df[new_order]
                     st.rerun()
@@ -408,29 +412,196 @@ with st.sidebar:
                 with st.expander("View Empty Columns"):
                     st.write(null_cols)
                 
-                if st.button("Fix: Drop Empty Columns", type="primary"):
+                if st.button("Fix: Drop Empty Columns", type="primary", key="drop_empty"):
                     st.session_state['df'] = df.drop(columns=null_cols)
                     st.rerun()
 
             # D. CHECK: MISSING TARGET VALUES
             # Count rows where target is NaN
             missing_target_count = df[target_col].isnull().sum()
+            
             if missing_target_count > 0:
                 st.error(f"Target column has {missing_target_count} missing values.")
-                if st.button("Fix: Drop Rows with Missing Target", type="primary"):
-                    st.session_state['df'] = df.dropna(subset=[target_col])
-                    st.rerun()
+                
+                # Determine target type
+                is_numeric_target = pd.api.types.is_numeric_dtype(df[target_col])
+                
+                if is_numeric_target:
+                    target_strategies = ["Drop Rows", "Impute with Mean", "Impute with KNN"]
+                else:
+                    target_strategies = ["Drop Rows", "Impute with Mode"]
+                
+                target_strategy = st.radio(
+                    "Target Column Strategy",
+                    target_strategies,
+                    help="Drop: Remove rows\nMode/Mean/KNN: Fill missing values",
+                    key="target_strategy"
+                )
+                
+                # Extra option for KNN neighbors if selected
+                target_knn_k = 5
+                if target_strategy == "Impute with KNN":
+                    target_knn_k = st.slider("Target KNN Neighbors", 1, 15, 5)
 
+                if st.button("Fix Target Column", type="primary", key="fix_target"):
+                    with st.spinner("Fixing target column..."):
+                        df_fixed = df.copy()
+                        rows_before = len(df_fixed)
+                        msg_text = ""
+                        
+                        if target_strategy == "Drop Rows":
+                            df_fixed = df_fixed.dropna(subset=[target_col])
+                            msg_text = f"Dropped {rows_before - len(df_fixed)} rows with missing target"
+                        
+                        elif target_strategy == "Impute with Mode":
+                            mode_val = df_fixed[target_col].mode()[0] if not df_fixed[target_col].mode().empty else df_fixed[target_col].value_counts().index[0]
+                            df_fixed[target_col].fillna(mode_val, inplace=True)
+                            msg_text = f"Imputed {missing_target_count} target nulls with mode: {mode_val}"
+                            
+                        elif target_strategy == "Impute with Mean":
+                            mean_val = df_fixed[target_col].mean()
+                            df_fixed[target_col].fillna(mean_val, inplace=True)
+                            msg_text = f"Imputed {missing_target_count} target nulls with mean: {mean_val:.2f}"
+                            
+                        elif target_strategy == "Impute with KNN":
+                            # Reshape for KNN imputer (it expects 2D array)
+                            imputer = KNNImputer(n_neighbors=target_knn_k)
+                            # We only impute the target column here, reshape to (-1, 1)
+                            target_values = df_fixed[target_col].values.reshape(-1, 1)
+                            imputed_values = imputer.fit_transform(target_values)
+                            df_fixed[target_col] = imputed_values.flatten()
+                            msg_text = f"Imputed {missing_target_count} target nulls with KNN (k={target_knn_k})"
+
+                        st.session_state['df'] = df_fixed
+                        # Use st.toast for immediate feedback instead of delayed rerun message
+                        st.toast(msg_text, icon="✅")
+                        st.rerun()
+
+            # === NEW: E. HANDLE MISSING VALUES IN FEATURES ===
+            df = st.session_state['df']  # Refresh after previous fixes
+            feature_cols = [c for c in df.columns if c != target_col]
+            missing_in_features = df[feature_cols].isnull().sum().sum()
+            
+            if missing_in_features > 0:
+                st.warning(f"Found {missing_in_features} missing values in feature columns.")
+                
+                with st.expander("Missing Values Details", expanded=True):
+                    missing_summary = df[feature_cols].isnull().sum()
+                    missing_summary = missing_summary[missing_summary > 0].sort_values(ascending=False)
+                    
+                    st.dataframe(
+                        pd.DataFrame({
+                            'Column': missing_summary.index,
+                            'Missing Count': missing_summary.values,
+                            'Missing %': (missing_summary.values / len(df) * 100).round(2)
+                        }).reset_index(drop=True),
+                        use_container_width=True
+                    )
+                
+                # Main strategy selection
+                main_strategy = st.radio(
+                    "Choose Strategy",
+                    ["1. Drop All Rows with Missing Values", "2. Impute Missing Values"],
+                    help="Drop: Removes all rows containing nulls\nImpute: Fills nulls intelligently"
+                )
+                
+                if main_strategy == "2. Impute Missing Values":
+                    st.markdown("##### Imputation Options")
+                    
+                    # Separate numeric and categorical columns
+                    numeric_cols = df[feature_cols].select_dtypes(include=[np.number]).columns.tolist()
+                    categorical_cols = [c for c in feature_cols if c not in numeric_cols]
+                    
+                    numeric_nulls = df[numeric_cols].isnull().sum().sum() if numeric_cols else 0
+                    categorical_nulls = df[categorical_cols].isnull().sum().sum() if categorical_cols else 0
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if numeric_nulls > 0:
+                            st.write(f"**Numeric Columns** ({numeric_nulls} nulls)")
+                            numeric_method = st.selectbox(
+                                "Method",
+                                ["KNN", "Mean"],
+                                help="KNN: Nearest neighbors\nMean: Column average",
+                                key="numeric_method"
+                            )
+                            if numeric_method == "KNN":
+                                n_neighbors = st.slider("Neighbors", 3, 10, 5, key="knn_neighbors")
+                        else:
+                            st.info("No missing values in numeric columns")
+                            numeric_method = None
+                    
+                    with col2:
+                        if categorical_nulls > 0:
+                            st.write(f"**Categorical Columns** ({categorical_nulls} nulls)")
+                            categorical_method = st.selectbox(
+                                "Method",
+                                ["Mode", "Drop Rows"],
+                                help="Mode: Most frequent value\nDrop: Remove rows",
+                                key="categorical_method"
+                            )
+                        else:
+                            st.info("No missing values in categorical columns")
+                            categorical_method = None
+                
+                # Apply button
+                if st.button("Apply Strategy", type="primary", key="apply_strategy"):
+                    with st.spinner("Processing..."):
+                        df_clean = df.copy()
+                        rows_before = len(df_clean)
+                        
+                        if main_strategy == "1. Drop All Rows with Missing Values":
+                            df_clean = df_clean.dropna(subset=feature_cols)
+                            rows_dropped = rows_before - len(df_clean)
+                            remaining_nulls = df_clean[feature_cols].isnull().sum().sum()
+                            
+                            if remaining_nulls == 0:
+                                st.toast(f"Dropped {rows_dropped} rows. Dataset now clean.", icon="✅")
+                            else:
+                                st.toast(f"Error: {remaining_nulls} nulls remain.", icon="❌")
+                        
+                        else:  # Imputation
+                            if numeric_method == "KNN" and numeric_nulls > 0:
+                                imputer = KNNImputer(n_neighbors=n_neighbors)
+                                df_clean[numeric_cols] = imputer.fit_transform(df_clean[numeric_cols])
+                                st.toast(f"KNN imputed {len(numeric_cols)} numeric columns", icon="✅")
+                            
+                            elif numeric_method == "Mean" and numeric_nulls > 0:
+                                df_clean[numeric_cols] = df_clean[numeric_cols].fillna(df_clean[numeric_cols].mean())
+                                st.toast(f"Mean imputed {len(numeric_cols)} numeric columns", icon="✅")
+                            
+                            if categorical_method == "Mode" and categorical_nulls > 0:
+                                for col in categorical_cols:
+                                    if df_clean[col].isnull().any():
+                                        mode_val = df_clean[col].mode()[0] if not df_clean[col].mode().empty else 'Unknown'
+                                        df_clean[col].fillna(mode_val, inplace=True)
+                                st.toast(f"Mode imputed {len(categorical_cols)} categorical columns", icon="✅")
+                            
+                            elif categorical_method == "Drop Rows" and categorical_nulls > 0:
+                                df_clean = df_clean.dropna(subset=categorical_cols)
+                                rows_dropped = rows_before - len(df_clean)
+                                st.toast(f"Dropped {rows_dropped} rows with categorical nulls", icon="ℹ️")
+                            
+                            remaining_nulls = df_clean[feature_cols].isnull().sum().sum()
+                            if remaining_nulls == 0:
+                                st.toast("Imputation complete!", icon="✅")
+                            else:
+                                st.toast(f"Warning: {remaining_nulls} nulls still present.", icon="⚠️")
+                        
+                        # Store messages in session state
+                        st.session_state['df'] = df_clean
+                        st.rerun()
+                
             # --- VALIDATION ---
-            # Now we validate the CLEANED dataframe
-            df = st.session_state['df'] # Refresh ref
+            df = st.session_state['df']  # Refresh ref
             
             is_valid, issues, warnings = validate_dataset(df)
             
             if not is_valid:
                 st.error("Dataset Validation Failed")
                 for issue in issues:
-                    st.error(f"ERROR: {issue}")
+                    st.error(f"{issue}")
                 st.stop()
             
             if warnings:
@@ -924,6 +1095,7 @@ else:
                 <li>Minimum 50 samples recommended</li>
                 <li>At least 2 classes in target</li>
                 <li>Handles missing values automatically</li>
+                <li>Supports both numeric and categorical features</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -938,6 +1110,7 @@ else:
                 <li>Interactive 3D visualizations</li>
                 <li>Real-time progress tracking</li>
                 <li>Export results as JSON/CSV</li>
+                <li>Comprehensive statistical analysis</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -952,33 +1125,37 @@ else:
                 <li>3 mutation strategies (bit-flip, uniform, adaptive)</li>
                 <li>Continuous weight encoding</li>
                 <li>Train/test split validation</li>
+                <li>Early stopping capability</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # Example usage section
+# Example usage section with arrows
     st.markdown("""
     <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                 padding: 2rem; border-radius: 10px; color: white; margin-top: 2rem;'>
-        <h3 style='margin-bottom: 1rem;'>How It Works</h3>
-        <div style='display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;'>
+        <h3 style='margin-bottom: 2rem; text-align: center; font-size: 2rem;'>How It Works</h3>
+        <div style='display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; align-items: center;'>
             <div style='text-align: center;'>
-                <div style='font-size: 2rem; margin-bottom: 0.5rem;'>1</div>
-                <p style='margin: 0;'>Upload CSV dataset</p>
+                <div style='font-size: 3rem; font-weight: bold; margin-bottom: 0.8rem;'>1</div>
+                <p style='margin: 0; font-size: 1.1rem; line-height: 1.4;'>Upload CSV<br>dataset</p>
             </div>
+            <div style='text-align: center; font-size: 3rem; font-weight: bold;'>→</div>
             <div style='text-align: center;'>
-                <div style='font-size: 2rem; margin-bottom: 0.5rem;'>2</div>
-                <p style='margin: 0;'>Choose mode & configure</p>
+                <div style='font-size: 3rem; font-weight: bold; margin-bottom: 0.8rem;'>2</div>
+                <p style='margin: 0; font-size: 1.1rem; line-height: 1.4;'>Choose mode<br>& configure</p>
             </div>
+            <div style='text-align: center; font-size: 3rem; font-weight: bold;'>→</div>
             <div style='text-align: center;'>
-                <div style='font-size: 2rem; margin-bottom: 0.5rem;'>3</div>
-                <p style='margin: 0;'>Run GA optimization</p>
+                <div style='font-size: 3rem; font-weight: bold; margin-bottom: 0.8rem;'>3</div>
+                <p style='margin: 0; font-size: 1.1rem; line-height: 1.4;'>Run GA<br>optimization</p>
             </div>
+            <div style='text-align: center; font-size: 3rem; font-weight: bold;'>→</div>
             <div style='text-align: center;'>
-                <div style='font-size: 2rem; margin-bottom: 0.5rem;'>4</div>
-                <p style='margin: 0;'>Explore 3D results</p>
+                <div style='font-size: 3rem; font-weight: bold; margin-bottom: 0.8rem;'>4</div>
+                <p style='margin: 0; font-size: 1.1rem; line-height: 1.4;'>Explore 3D<br>results</p>
             </div>
         </div>
     </div>
