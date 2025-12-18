@@ -28,7 +28,7 @@ from .config import (
     ELITISM_RATE, TOURNAMENT_SIZE, RANDOM_STATE, WEIGHT_THRESHOLD, 
     MAX_ELITISM_FRACTION, VERBOSE, SELECTION_METHODS, CROSSOVER_METHODS,
     MUTATION_METHODS, DEFAULT_SELECTION, DEFAULT_CROSSOVER, DEFAULT_MUTATION,
-    EARLY_STOPPING, EARLY_STOPPING_PATIENCE, EARLY_STOPPING_MIN_GENS, EARLY_STOPPING_DELTA
+    EARLY_STOPPING, EARLY_STOPPING_PATIENCE, EARLY_STOPPING_MIN_GENS, EARLY_STOPPING_DELTA, LAMBDA_PENALTY
 )
 
 
@@ -56,6 +56,9 @@ class GeneticAlgorithm:
         self.tournament_size = kwargs.get('tournament_size', TOURNAMENT_SIZE)
         self.weight_threshold = kwargs.get('weight_threshold', WEIGHT_THRESHOLD)
         
+        # Extract lambda_penalty from kwargs
+        self.lambda_penalty = kwargs.get('lambda_penalty', LAMBDA_PENALTY)
+
         # Early stopping
         self.early_stopping = EARLY_STOPPING
         self.patience = EARLY_STOPPING_PATIENCE
@@ -93,7 +96,7 @@ class GeneticAlgorithm:
         self.rng = np.random.RandomState(random_state)
         
         # Fitness evaluator
-        self.evaluator = FitnessEvaluator(X, y)
+        self.evaluator = FitnessEvaluator(X, y, lambda_penalty=self.lambda_penalty)
         
         # Population and fitness (initialized during evolution)
         self.population = None

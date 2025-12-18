@@ -693,7 +693,8 @@ if uploaded_file:
                 pop_size=pop_size,
                 n_generations=n_gen,
                 mut_rate=mut_rate,
-                cross_rate=cross_rate
+                cross_rate=cross_rate,
+                lambda_penalty=lambda_val
             )
             best_weights, history = ga.evolve()
         
